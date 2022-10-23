@@ -14,8 +14,6 @@ async def on_ready():
     await change_channels.start()
 @bot.event
 async def on_presence_update(before: discord.Member, after: discord.Member) -> None:
-    if len(after.activities) == 0 or before.activities == after.activities:
-        return
     async def get_date() -> bool | dict:
         async with asqlite.connect("./database.db")as conn:
             async with conn.cursor() as cursor:
@@ -24,11 +22,19 @@ async def on_presence_update(before: discord.Member, after: discord.Member) -> N
                 if fetch  == []:
                     return False
                 return dict(fetch[0])
+    data = await get_date()
     custom = list(filter(lambda j:isinstance(j, discord.CustomActivity), after.activities))
     if custom == []:
+        ROLE = data["roleID"]
+        channel = bot.get_channel(data["channelID"])
+        ROLE = channel.guild.get_role(ROLE)
+        if ROLE in after.roles:
+            await after.remove_roles(ROLE, reason="Changed status")
+            embed = discord.Embed(title=after, description=f"<@{after.id}> removed his status.", colour=discord.Color.red(), timestamp=discord.utils.utcnow())
+            await channel.send(embed=embed)
         return
     custom = custom[0]
-    data = await get_date()
+    
     if data == False or data["listen"] == 0:
         return
     if (text := data["statustext"]) == custom.name:
@@ -37,6 +43,14 @@ async def on_presence_update(before: discord.Member, after: discord.Member) -> N
         await after.add_roles(ROLE)
         embedchannel = discord.Embed(title=after, description=f"Found someone with the status **{text}**", colour=discord.Color.green(), timestamp=discord.utils.utcnow())
         await channel.send(embed=embedchannel)
+    else:
+        channel = bot.get_channel(data["channelID"])
+        ROLE = channel.guild.get_role(data["roleID"])
+        if ROLE in after.roles:
+            await after.remove_roles(ROLE, reason="Changed status")
+            embed = discord.Embed(title=after, description=f"<@{after.id}> changed his status to **{custom.name}**", colour=discord.Color.red(), timestamp=discord.utils.utcnow())
+            await channel.send(embed=embed)
+
 @bot.slash_command(name="status", guild_ids=GUILD_IDS)
 @discord.option(name="switch", type=bool, description="on or off", required=True)
 async def status_change(ctx: discord.ApplicationContext, switch: bool) -> None:
@@ -139,17 +153,19 @@ async def change_channels() -> None:
 
 
 @bot.slash_command(name="statusrole", guild_ids=GUILD_IDS)
-@discord.option(name="statustext", description="the text of the status",type=str , required=True)
-@discord.option(name="logchannel", description="The channel to log each member", required=True, type=discord.TextChannel)
-@discord.option(name="role", description="The role to role the member", required=True, type=discord.Role)
 @discord.option(name="switch", description="Set on or off", required=True, choices=["on", "off"], type=str)
+@discord.option(name="statustext", description="the text of the status",type=str , required=False)
+@discord.option(name="logchannel", description="The channel to log each member", required=False, type=discord.TextChannel)
+@discord.option(name="role", description="The role to role the member", required=False, type=discord.Role)
 async def statusrole(
     ctx: discord.ApplicationContext,
-    statustext: str,
-    logchannel: discord.TextChannel,
-    role: discord.Role,
-    switch: str
+    switch: str,
+    statustext: str = None,
+    logchannel: discord.TextChannel = None,
+    role: discord.Role = None,
+    
 ) -> None:
+    
     await ctx.defer()
     async def update_data() -> None:
         async with asqlite.connect("./database.db")as conn:
@@ -181,11 +197,15 @@ async def statusrole(
                 await conn.commit()
         await ctx.respond(embed=discord.Embed(title="Off", description="It's off now!"))
         return
-    if logchannel.can_send() == False:
+    if   not None in (statustext, logchannel, role) and logchannel.can_send() == False:
         embed = discord.Embed(title="Failed", description=f"I don't have permission to send messages in <#{logchannel.id}>")
         await ctx.respond(embed=embed)
         return
     else:
+        if None in (statustext, logchannel, role):
+            embed = discord.Embed(title="Error", description="Some of the arguments were Not passed D:", colour=discord.Colour.red())
+            await ctx.respond(embed=embed)
+            return
         # for each
         if role.is_assignable() ==  False:
             await ctx.respond(embed=discord.Embed(title="RIP", description=f"I cannot role people with the role <@&{role.id}>", colour=discord.Color.red()))
