@@ -1,0 +1,42 @@
+@bot.event
+async def on_presence_update(before: discord.Member, after: discord.Member) -> None:
+    print("working")
+    if before.status != after.status:
+        return
+    async def get_date() -> bool | dict:
+        async with bot.pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                cursor = await conn.cursor(aiomysql.DictCursor)
+                await cursor.execute(f"SELECT * FROM statusrole WHERE guildID = %s", (after.guild.id,))
+                fetch = await cursor.fetchall()
+                if fetch  == ():
+                    return False
+                return fetch[0]
+    data = await get_date()
+    custom = list(filter(lambda j:isinstance(j, discord.CustomActivity), after.activities))
+    if custom == []:
+        ROLE = data["roleID"]
+        channel = bot.get_channel(data["channelID"])
+        ROLE = channel.guild.get_role(ROLE)
+        if ROLE in after.roles:
+            await after.remove_roles(ROLE, reason="Changed status")
+            embed = discord.Embed(title=after, description=f"<@{after.id}> removed his status.", colour=discord.Color.red(), timestamp=discord.utils.utcnow())
+            await channel.send(embed=embed)
+        return
+    custom = custom[0]
+    
+    if data == False or data["listen"] == 0:
+        return
+    if (text := data["statustext"]) == custom.name:
+        channel = bot.get_channel(data["channelID"])
+        ROLE = channel.guild.get_role(data["roleID"])
+        await after.add_roles(ROLE)
+        embedchannel = discord.Embed(title=after, description=f"Found someone with the status **{text}**", colour=discord.Color.green(), timestamp=discord.utils.utcnow())
+        await channel.send(embed=embedchannel)
+    else:
+        channel = bot.get_channel(data["channelID"])
+        ROLE = channel.guild.get_role(data["roleID"])
+        if ROLE in after.roles:
+            await after.remove_roles(ROLE, reason="Changed status")
+            embed = discord.Embed(title=after, description=f"<@{after.id}> changed his status to **{custom.name}**", colour=discord.Color.red(), timestamp=discord.utils.utcnow())
+            await channel.send(embed=embed)
