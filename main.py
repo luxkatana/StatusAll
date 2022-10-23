@@ -3,7 +3,7 @@ from discord.ext import commands, tasks
 dotenv.load_dotenv()
 intents = discord.Intents.all()
 TOKEN = os.environ["TOKEN"]
-GUILD_IDS = []
+GUILD_IDS = [941803156633956362]
 bot = commands.Bot(command_prefix="./",
                    intents=intents,
                    activity=discord.Game("*listens*"))
@@ -14,6 +14,8 @@ async def on_ready():
     await change_channels.start()
 @bot.event
 async def on_presence_update(before: discord.Member, after: discord.Member) -> None:
+    if before.status != after.status:
+        return
     async def get_date() -> bool | dict:
         async with asqlite.connect("./database.db")as conn:
             async with conn.cursor() as cursor:
