@@ -3,7 +3,7 @@ from discord.ext import commands, tasks
 dotenv.load_dotenv()
 intents = discord.Intents.all()
 TOKEN = os.environ["TOKEN"]
-GUILD_IDS = [941803156633956362]
+GUILD_IDS = []
 bot = commands.Bot(command_prefix="./",
                    intents=intents,
                    activity=discord.Game("*listens*"))
