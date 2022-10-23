@@ -25,6 +25,8 @@ async def on_presence_update(before: discord.Member, after: discord.Member) -> N
                     return False
                 return dict(fetch[0])
     data = await get_date()
+    if data == False:
+        return
     custom = list(filter(lambda j:isinstance(j, discord.CustomActivity), after.activities))
     if custom == []:
         ROLE = data["roleID"]
